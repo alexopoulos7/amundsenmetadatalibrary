@@ -84,20 +84,26 @@ class Column:
                  name: str,
                  description: Optional[str],
                  col_type: str,
-                 sort_order: int,
+                 pii:int,
+                 team:str,
+                 sort_order: int,                 
                  stats: Iterable[Statistics] =()) -> None:
         self.name = name
         self.description = description
         self.col_type = col_type
         self.sort_order = sort_order
         self.stats = stats
+        self.pii = pii
+        self.team = team
 
     def __repr__(self) -> str:
-        return 'Column(name={!r}, description={!r}, col_type={!r}, sort_order={!r}, stats={!r})'\
+        return 'Column(name={!r}, description={!r}, col_type={!r}, sort_order={!r}, is_pii={!r}, team={!r}, stats={!r})'\
             .format(self.name,
                     self.description,
                     self.col_type,
                     self.sort_order,
+                    self.pii,
+                    self.team,
                     self.stats)
 
 

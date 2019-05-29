@@ -60,6 +60,19 @@ class BaseProxy(metaclass=ABCMeta):
                                table_uri: str,
                                column_name: str) -> Union[str, None]:
         pass
+        
+    @abstractmethod
+    def put_column_team(self, *,
+                               table_uri: str,
+                               column_name: str,
+                               team: str) -> None:
+        pass
+
+    @abstractmethod
+    def get_column_team(self, *,
+                               table_uri: str,
+                               column_name: str) -> Union[str, None]:
+        pass
 
     @abstractmethod
     def get_popular_tables(self, *,

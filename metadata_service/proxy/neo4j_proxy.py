@@ -89,7 +89,7 @@ class Neo4jProxy(BaseProxy):
     @timer_with_counter
     def _exec_col_query(self, table_uri: str) -> Tuple:
         # Return Value: (Columns, Last Processed Record)
-
+        LOGGER.info("****************")
         column_level_query = textwrap.dedent("""
         MATCH (db:Database)<-[:CLUSTER_OF]-(clstr:Cluster)<-[:SCHEMA_OF]-(schema:Schema)
         <-[:TABLE_OF]-(tbl:Table {key: $tbl_key})-[:COLUMN]->(col:Column)
@@ -102,6 +102,7 @@ class Neo4jProxy(BaseProxy):
         tbl_col_neo4j_records = self._execute_cypher_query(
             statement=column_level_query, param_dict={'tbl_key': table_uri})
         cols = []
+        LOGGER.info('COLUMN QUERY  {}'.format(column_level_query))
         for tbl_col_neo4j_record in tbl_col_neo4j_records:
             # Getting last record from this for loop as Neo4j's result's random access is O(n) operation.
             col_stats = []
@@ -115,9 +116,12 @@ class Neo4jProxy(BaseProxy):
                 col_stats.append(col_stat)
 
             last_neo4j_record = tbl_col_neo4j_record
+            LOGGER.info("Returned Column {}".format(tbl_col_neo4j_record['col']))
             col = Column(name=tbl_col_neo4j_record['col']['name'],
                          description=self._safe_get(tbl_col_neo4j_record, 'col_dscrpt', 'description'),
                          col_type=tbl_col_neo4j_record['col']['type'],
+                         pii=int(tbl_col_neo4j_record['col']['pii'])==1,
+                         team=tbl_col_neo4j_record['col']['team'],
                          sort_order=int(tbl_col_neo4j_record['col']['sort_order']),
                          stats=col_stats)
 
@@ -363,6 +367,31 @@ class Neo4jProxy(BaseProxy):
         return column_description
 
     @timer_with_counter
+    def get_column_team(self, *,
+                               table_uri: str,
+                               column_name: str) -> Union[str, None]:
+        """
+        Get the column team based on table uri. Any exception will propagate back to api server.
+
+        :param table_uri:
+        :param column_name:
+        :return:
+        """
+        column_team_query = textwrap.dedent("""
+        MATCH (tbl:Table {key: $tbl_key})-[:COLUMN]->(c:Column {name: $column_name})-[:TEAM]->(d:Team)
+        RETURN d.team AS team;
+        """)
+
+        result = self._execute_cypher_query(statement=column_team_query,
+                                            param_dict={'tbl_key': table_uri, 'column_name': column_name})
+
+        column_descrpt = result.single()
+
+        column_team = column_descrpt['team'] if column_descrpt else None
+
+        return column_team
+
+    @timer_with_counter
     def put_column_description(self, *,
                                table_uri: str,
                                column_name: str,
@@ -404,6 +433,70 @@ class Neo4jProxy(BaseProxy):
             if not result.single():
                 raise RuntimeError('Failed to update the table {tbl} '
                                    'column {col} description'.format(tbl=table_uri,
+                                                                     col=column_uri))
+
+            # end neo4j transaction
+            tx.commit()
+
+        except Exception as e:
+
+            LOGGER.exception('Failed to execute update process')
+
+            if not tx.closed():
+                tx.rollback()
+
+            # propagate error to api
+            raise e
+
+        finally:
+
+            tx.close()
+
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                LOGGER.debug('Update process elapsed for {} seconds'.format(time.time() - start))
+    
+    @timer_with_counter
+    def put_column_team(self, *,
+                               table_uri: str,
+                               column_name: str,
+                               team: str) -> None:
+        """
+        Update column team with input from user
+        :param table_uri:
+        :param column_name:
+        :param team:
+        :return:
+        """
+
+        column_uri = table_uri + '/' + column_name  # type: str
+        team_key = column_uri + '/_team'
+
+        upsert_team_query = textwrap.dedent("""
+            MERGE (u:Team {key: $team_key})
+            on CREATE SET u={team: $team, key: $team_key}
+            on MATCH SET u={team: $team, key: $team_key}
+            """)
+
+        upsert_team_col_relation_query = textwrap.dedent("""
+            MATCH (n1:Team {key: $team_key}), (n2:Column {key: $column_key})
+            MERGE (n1)-[r1:TEAM_OF]->(n2)-[r2:TEAM]->(n1)
+            RETURN n1.key, n2.key
+            """)
+
+        start = time.time()
+
+        try:
+            tx = self._driver.session().begin_transaction()
+
+            tx.run(upsert_team_query, {'team': team,
+                                       'team_key': team_key})
+
+            result = tx.run(upsert_team_col_relation_query, {'team_key': team_key,
+                                                             'column_key': column_uri})
+
+            if not result.single():
+                raise RuntimeError('Failed to update the table {tbl} '
+                                   'column {col} team'.format(tbl=table_uri,
                                                                      col=column_uri))
 
             # end neo4j transaction

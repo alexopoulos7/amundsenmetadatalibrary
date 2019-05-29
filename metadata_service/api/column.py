@@ -53,3 +53,50 @@ class ColumnDescriptionAPI(Resource):
 
         except Exception:
             return {'message': 'Internal server error!'}, HTTPStatus.INTERNAL_SERVER_ERROR
+
+class ColumnTeamAPI(Resource):
+    """
+    ColumnTeamAPI supports PUT and GET operations to upsert column Team
+    """
+    def __init__(self) -> None:
+        self.client = get_proxy_client()
+
+        self.parser = reqparse.RequestParser()
+        self.parser.add_argument('team', type=str, location='json')
+
+        super(ColumnTeamAPI, self).__init__()
+
+    def put(self,
+            table_uri: str,
+            column_name: str,
+            team_val: str) -> Iterable[Union[dict, tuple, int, None]]:
+        """
+        Updates column team
+        """
+        try:
+            self.client.put_column_team(table_uri=table_uri,
+                                               column_name=column_name,
+                                               team=team_val)
+
+            return None, HTTPStatus.OK
+
+        except NotFoundException:
+            msg = 'table_uri {} with column {} does not exist'.format(table_uri, column_name)
+            return {'message': msg}, HTTPStatus.NOT_FOUND
+
+    def get(self, table_uri: str, column_name: str) -> Union[tuple, int, None]:
+        """
+        Gets column teams in Neo4j
+        """
+        try:
+            team = self.client.get_column_team(table_uri=table_uri,
+                                                             column_name=column_name)
+
+            return {'team': team}, HTTPStatus.OK
+
+        except NotFoundException:
+            msg = 'table_uri {} with column {} does not exist'.format(table_uri, column_name)
+            return {'message': msg}, HTTPStatus.NOT_FOUND
+
+        except Exception:
+            return {'message': 'Internal server error!'}, HTTPStatus.INTERNAL_SERVER_ERROR

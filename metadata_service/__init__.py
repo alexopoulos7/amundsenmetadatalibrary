@@ -8,7 +8,7 @@ from typing import Dict, Any  # noqa: F401
 from flask import Flask, Blueprint
 from flask_restful import Api
 
-from metadata_service.api.column import ColumnDescriptionAPI
+from metadata_service.api.column import ColumnDescriptionAPI, ColumnTeamAPI
 from metadata_service.api.healthcheck import healthcheck
 from metadata_service.api.popular_tables import PopularTablesAPI
 from metadata_service.api.system import Neo4jDetailAPI
@@ -81,6 +81,10 @@ def create_app(*, config_module_class: str) -> Flask:
     api.add_resource(ColumnDescriptionAPI,
                      '/table/<path:table_uri>/column/<column_name>/description',
                      '/table/<path:table_uri>/column/<column_name>/description/<path:description_val>')
+    # api.add_resource(ColumnTeamAPI, '/put_column_team/')
+    api.add_resource(ColumnTeamAPI,
+                     '/table/<path:table_uri>/column/<column_name>/team',
+                     '/table/<path:table_uri>/column/<column_name>/team/<path:team_val>')
     api.add_resource(Neo4jDetailAPI,
                      '/latest_updated_ts')
     api.add_resource(TagAPI,

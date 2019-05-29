@@ -31,6 +31,8 @@ column_fields = {
     'description': fields.String,
     'type': fields.String(attribute='col_type'),
     'sort_order': fields.Integer,
+    'team': fields.String,
+    'pii': fields.Boolean,
     # Can be an empty list
     'stats': fields.List(fields.Nested(column_stat_fields))
 }
